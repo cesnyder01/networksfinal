@@ -102,6 +102,76 @@ private int ackNum = 0;
   
   // Handle different states
   switch(state) {
+    case ESTABLISHED:
+    if (p.finFlag) {
+        // passive close - remote side closing first
+        ackNum = p.seqNum + 1;
+        
+        // send ACK
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        changeState(State.CLOSE_WAIT);
+        
+        // immediately send FIN
+        TCPPacket finPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            false, false, true, 0, null
+        );
+        TCPWrapper.send(finPacket, remoteAddress);
+        changeState(State.LAST_ACK);
+    }
+    break;
+
+case LAST_ACK:
+    if (p.ackFlag && !p.finFlag) {
+        changeState(State.CLOSED);
+    }
+    break;
+    case FIN_WAIT_1:
+    if (p.ackFlag && !p.synFlag && !p.finFlag) {
+        // received ACK
+        seqNum = p.ackNum;
+        changeState(State.FIN_WAIT_2);
+    } else if (p.finFlag) {
+        // simultaneous close - received FIN
+        ackNum = p.seqNum + 1;
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        changeState(State.CLOSING);
+    }
+    break;
+
+case FIN_WAIT_2:
+    if (p.finFlag) {
+        // received FIN
+        ackNum = p.seqNum + 1;
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        changeState(State.TIME_WAIT);
+        createTimerTask(30000, "TIME_WAIT");
+    }
+    break;
+
+case CLOSING:
+    if (p.ackFlag && !p.finFlag) {
+        // received ACK
+        changeState(State.TIME_WAIT);
+        createTimerTask(30000, "TIME_WAIT");
+    }
+    break;
     case LISTEN:
       if (p.synFlag && !p.ackFlag) {
         // Received SYN, send SYN-ACK
@@ -254,6 +324,29 @@ private int ackNum = 0;
    * @exception  IOException  if an I/O error occurs when closing this socket.
    */
   public synchronized void close() throws IOException {
+
+    public synchronized void close() throws IOException {
+    changeState(State.FIN_WAIT_1);
+    
+    TCPPacket finPacket = new TCPPacket(
+        localport, remotePort,
+        seqNum, ackNum,
+        false,  // ackFlag
+        false,  // synFlag
+        true,   // finFlag
+        0, null
+    );
+    TCPWrapper.send(finPacket, remoteAddress);
+    
+    while (state != State.CLOSED) {
+        try {
+            wait();
+        } catch (InterruptedException e) {
+            throw new IOException("Close interrupted");
+        }
+    }
+}
+
   }
 
   /** 
@@ -273,10 +366,12 @@ private int ackNum = 0;
    * @param ref Generic reference that can be used by the timer to return 
    * information.
    */
-  public synchronized void handleTimer(Object ref){
-
-    // this must run only once the last timer (30 second timer) has expired
+  public synchronized void handleTimer(Object ref) {
+    if (ref.equals("TIME_WAIT")) {
+        changeState(State.CLOSED);
+        notifyAll();  // wake up close() which is waiting for CLOSED
+    }
     tcpTimer.cancel();
     tcpTimer = null;
-  }
+}
 }
