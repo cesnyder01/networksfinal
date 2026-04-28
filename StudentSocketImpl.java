@@ -10,7 +10,8 @@ class StudentSocketImpl extends BaseSocketImpl {
   //   protected int localport;
 
   private enum State {
-  CLOSED, LISTEN, SYN_SENT, SYN_RCVD, ESTABLISHED
+  CLOSED, LISTEN, SYN_SENT, SYN_RCVD, ESTABLISHED,
+  FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, CLOSING, LAST_ACK, TIME_WAIT
 }
 
 private State state = State.CLOSED;
@@ -30,6 +31,11 @@ private int ackNum = 0;
     this.D = D;
   }
 
+  private void changeState(State newState) {
+    System.out.println("!!! " + state + " -> " + newState);
+    state = newState;
+  }
+
   /**
    * Connects this socket to the specified port number on the specified host.
    *
@@ -45,6 +51,10 @@ private int ackNum = 0;
   this.remotePort = port;
 
   localport = D.getNextAvailablePort();
+
+  changeState(State.SYN_SENT);
+
+  System.out.println("localport is " + localport);
 
   // register connection with demultiplexer
   D.registerConnection(remoteAddress, localport, remotePort, this);
@@ -62,11 +72,19 @@ private int ackNum = 0;
     null
   );
 
+  
   TCPWrapper.send(synPacket, remoteAddress);
-
-  state = State.SYN_SENT;
-
-  System.out.println("!!! CLOSED -> SYN_SENT");
+  
+  System.out.println("About to wait, state=" + state);
+  // Wait for connection to be established
+  while (state != State.ESTABLISHED) {
+    try {
+      wait();
+    } catch (InterruptedException e) {
+      throw new IOException("Connection interrupted");
+    }
+  }
+  System.out.println("Done waiting, state=" + state);
 }
   
   /**
@@ -74,10 +92,99 @@ private int ackNum = 0;
    * @param p The packet that arrived
    */
   public synchronized void receivePacket(TCPPacket p) {
+
+  System.out.println("STATE=" + state + " from=" + p.sourceAddr + ":" + p.sourcePort);
+
   System.out.println("Received packet:");
   System.out.println("SYN=" + p.synFlag + 
                      " ACK=" + p.ackFlag + 
                      " FIN=" + p.finFlag);
+  
+  // Handle different states
+  switch(state) {
+    case LISTEN:
+      if (p.synFlag && !p.ackFlag) {
+        // Received SYN, send SYN-ACK
+        System.out.println("LISTEN: Received SYN, sending SYN-ACK");
+        
+        // Store remote connection info
+        remoteAddress = p.sourceAddr;
+        remotePort = p.sourcePort;
+        ackNum = p.seqNum + 1;
+        
+        // Unregister as listening socket and register as connection
+        try {
+          D.unregisterListeningSocket(localport, this);
+          D.registerConnection(remoteAddress, localport, remotePort, this);
+          System.out.println("Registered connection: " + remoteAddress + ":" + remotePort);
+        } catch (IOException e) {
+          System.err.println("Failed to register connection: " + e);
+        }
+        
+        // Send SYN-ACK
+        TCPPacket synAckPacket = new TCPPacket(
+          localport,
+          remotePort,
+          seqNum,
+          ackNum,
+          true,   // ackFlag
+          true,   // synFlag
+          false,  // finFlag
+          0,
+          null
+        );
+        changeState(State.SYN_RCVD);
+        TCPWrapper.send(synAckPacket, remoteAddress);
+      }
+      break;
+      
+    case SYN_SENT:
+      if (p.synFlag && p.ackFlag) {
+        // Received SYN-ACK, send ACK to complete handshake
+        System.out.println("SYN_SENT: Received SYN-ACK, sending ACK");
+        
+        if (p.ackNum == seqNum + 1) {
+          ackNum = p.seqNum + 1;
+          seqNum = p.ackNum;
+          
+          // Send ACK
+          TCPPacket ackPacket = new TCPPacket(
+            localport,
+            remotePort,
+            seqNum,
+            ackNum,
+            true,   // ackFlag
+            false,  // synFlag
+            false,  // finFlag
+            0,
+            null
+          );
+          changeState(State.ESTABLISHED);
+          TCPWrapper.send(ackPacket, remoteAddress);
+        
+        }
+      }
+      break;
+      
+    case SYN_RCVD:
+      if (p.ackFlag && !p.synFlag) {
+        // Received ACK, connection established
+        System.out.println("SYN_RCVD: Received ACK, connection established");
+        
+        if (p.ackNum == seqNum + 1) {
+          seqNum = p.ackNum;
+          changeState(State.ESTABLISHED);
+        }
+      }
+      break;
+      
+    default:
+      // Handle other states (for now, just print)
+      break;
+  }
+  
+  // Notify any waiting threads
+  notifyAll();
  }
   
   /** 
@@ -88,13 +195,24 @@ private int ackNum = 0;
    * Note that localport is already set prior to this being called.
    */
   public synchronized void acceptConnection() throws IOException {
-  state = State.LISTEN;
+  changeState(State.LISTEN);
+
+  this.port = localport;
 
   System.out.println("Registering listening socket on port " + localport);
 
   D.registerListeningSocket(localport, this);
 
-  System.out.println("!!! CLOSED -> LISTEN");
+  // Wait for connection to be established (SYN_RCVD or ESTABLISHED)
+  System.out.println("About to wait, state=" + state);
+  while (state != State.ESTABLISHED) {
+    try {
+      wait();
+    } catch (InterruptedException e) {
+      throw new IOException("Accept interrupted");
+    }
+  }
+  System.out.println("Done waiting, state=" + state);
  }
 
   
