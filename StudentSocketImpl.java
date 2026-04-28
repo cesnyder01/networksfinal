@@ -90,6 +90,8 @@ private int ackNum = 0;
   public synchronized void acceptConnection() throws IOException {
   state = State.LISTEN;
 
+  System.out.println("Registering listening socket on port " + localport);
+
   D.registerListeningSocket(localport, this);
 
   System.out.println("!!! CLOSED -> LISTEN");
