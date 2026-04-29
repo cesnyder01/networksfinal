@@ -140,6 +140,16 @@ case LAST_ACK:
     }
     break;
     case FIN_WAIT_1:
+      if (p.synFlag && p.ackFlag) {
+        // stale SYN-ACK retransmit - send ACK to silence server
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        break;
+    }
     if (p.ackFlag && !p.synFlag && !p.finFlag) {
         // received ACK
         if (tcpTimer != null) {
@@ -150,7 +160,7 @@ case LAST_ACK:
         changeState(State.FIN_WAIT_2);
     } else if (p.finFlag) {
         if (tcpTimer != null) {
-            tcpTimer.cancel();  // ← cancel the FIN retransmit timer
+            tcpTimer.cancel();  //  cancel the FIN retransmit timer
             tcpTimer = null;
          }
         // simultaneous close - received FIN
