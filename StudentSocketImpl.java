@@ -211,6 +211,14 @@ case CLOSING:
         }
         changeState(State.TIME_WAIT);
         createTimerTask(30000, "TIME_WAIT");
+    } else if (p.finFlag) {
+        // retransmitted FIN - resend ACK
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
     }
     break;
     case LISTEN:
