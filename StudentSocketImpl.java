@@ -149,6 +149,10 @@ case LAST_ACK:
         seqNum = p.ackNum;
         changeState(State.FIN_WAIT_2);
     } else if (p.finFlag) {
+        if (tcpTimer != null) {
+            tcpTimer.cancel();  // ← cancel the FIN retransmit timer
+            tcpTimer = null;
+         }
         // simultaneous close - received FIN
         ackNum = p.seqNum + 1;
         TCPPacket ackPacket = new TCPPacket(
