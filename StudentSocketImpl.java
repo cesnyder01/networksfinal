@@ -130,6 +130,7 @@ private int ackNum = 0;
 case LAST_ACK:
     if (p.ackFlag && !p.finFlag) {
         changeState(State.CLOSED);
+        notifyAll();
     }
     break;
     case FIN_WAIT_1:
@@ -162,6 +163,18 @@ case FIN_WAIT_2:
         TCPWrapper.send(ackPacket, remoteAddress);
         changeState(State.TIME_WAIT);
         createTimerTask(30000, "TIME_WAIT");
+    }
+    break;
+
+case TIME_WAIT:
+    if (p.finFlag) {
+        // retransmitted FIN - just resend ACK, don't change state
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
     }
     break;
 
@@ -324,6 +337,11 @@ case CLOSING:
    * @exception  IOException  if an I/O error occurs when closing this socket.
    */
   public synchronized void close() throws IOException {
+
+    if (state == State.CLOSED) return;  // already closed
+    if (state == State.LAST_ACK) return;  // passive close in progress
+    if (state == State.CLOSE_WAIT) return;  // passive close in progress
+    
 
     changeState(State.FIN_WAIT_1);
     
