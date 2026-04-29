@@ -124,12 +124,17 @@ private int ackNum = 0;
             false, false, true, 0, null
         );
         TCPWrapper.send(finPacket, remoteAddress);
+        createTimerTask(2000, finPacket);
         changeState(State.LAST_ACK);
     }
     break;
 
 case LAST_ACK:
     if (p.ackFlag && !p.finFlag) {
+        if (tcpTimer != null) {
+            tcpTimer.cancel();  
+            tcpTimer = null;
+        }
         changeState(State.CLOSED);
         notifyAll();
     }
@@ -138,9 +143,9 @@ case LAST_ACK:
     if (p.ackFlag && !p.synFlag && !p.finFlag) {
         // received ACK
         if (tcpTimer != null) {
-    tcpTimer.cancel();
-    tcpTimer = null;
-}
+            tcpTimer.cancel();
+            tcpTimer = null;
+        }
         seqNum = p.ackNum;
         changeState(State.FIN_WAIT_2);
     } else if (p.finFlag) {
