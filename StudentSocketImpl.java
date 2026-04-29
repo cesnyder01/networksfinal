@@ -325,7 +325,6 @@ case CLOSING:
    */
   public synchronized void close() throws IOException {
 
-    public synchronized void close() throws IOException {
     changeState(State.FIN_WAIT_1);
     
     TCPPacket finPacket = new TCPPacket(
@@ -347,7 +346,7 @@ case CLOSING:
     }
 }
 
-  }
+  
 
   /** 
    * create TCPTimerTask instance, handling tcpTimer creation
