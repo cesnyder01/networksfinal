@@ -408,6 +408,8 @@ case CLOSING:
     if (ref.equals("TIME_WAIT")) {
         changeState(State.CLOSED);
         notifyAll();
+        tcpTimer.cancel();
+        tcpTimer = null;
     } else {
         // resend the dropped packet
         TCPPacket packet = (TCPPacket) ref;
