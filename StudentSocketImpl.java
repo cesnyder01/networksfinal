@@ -74,6 +74,7 @@ private int ackNum = 0;
 
   
   TCPWrapper.send(synPacket, remoteAddress);
+  createTimerTask(2000, synPacket);  // retry after 2 seconds
   
   System.out.println("About to wait, state=" + state);
   // Wait for connection to be established
@@ -136,6 +137,10 @@ case LAST_ACK:
     case FIN_WAIT_1:
     if (p.ackFlag && !p.synFlag && !p.finFlag) {
         // received ACK
+        if (tcpTimer != null) {
+    tcpTimer.cancel();
+    tcpTimer = null;
+}
         seqNum = p.ackNum;
         changeState(State.FIN_WAIT_2);
     } else if (p.finFlag) {
@@ -181,6 +186,10 @@ case TIME_WAIT:
 case CLOSING:
     if (p.ackFlag && !p.finFlag) {
         // received ACK
+        if (tcpTimer != null) {
+            tcpTimer.cancel();
+            tcpTimer = null;
+        }
         changeState(State.TIME_WAIT);
         createTimerTask(30000, "TIME_WAIT");
     }
@@ -218,12 +227,17 @@ case CLOSING:
         );
         changeState(State.SYN_RCVD);
         TCPWrapper.send(synAckPacket, remoteAddress);
+        createTimerTask(2000, synAckPacket);
       }
       break;
       
     case SYN_SENT:
       if (p.synFlag && p.ackFlag) {
         // Received SYN-ACK, send ACK to complete handshake
+        if (tcpTimer != null) {
+            tcpTimer.cancel();
+            tcpTimer = null;
+        }
         System.out.println("SYN_SENT: Received SYN-ACK, sending ACK");
         
         if (p.ackNum == seqNum + 1) {
@@ -252,6 +266,10 @@ case CLOSING:
     case SYN_RCVD:
       if (p.ackFlag && !p.synFlag) {
         // Received ACK, connection established
+        if (tcpTimer != null) {
+            tcpTimer.cancel();
+            tcpTimer = null;
+        }
         System.out.println("SYN_RCVD: Received ACK, connection established");
         
         if (p.ackNum == seqNum + 1) {
@@ -354,6 +372,7 @@ case CLOSING:
         0, null
     );
     TCPWrapper.send(finPacket, remoteAddress);
+    createTimerTask(2000, finPacket);
     
     while (state != State.CLOSED) {
         try {
@@ -384,11 +403,16 @@ case CLOSING:
    * information.
    */
   public synchronized void handleTimer(Object ref) {
+      if (state == State.CLOSED) return;
+    
     if (ref.equals("TIME_WAIT")) {
         changeState(State.CLOSED);
-        notifyAll();  // wake up close() which is waiting for CLOSED
+        notifyAll();
+    } else {
+        // resend the dropped packet
+        TCPPacket packet = (TCPPacket) ref;
+        TCPWrapper.send(packet, remoteAddress);
+        createTimerTask(2000, packet);  // keep retrying
     }
-    tcpTimer.cancel();
-    tcpTimer = null;
 }
 }
