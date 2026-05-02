@@ -74,7 +74,7 @@ private int ackNum = 0;
 
   
   TCPWrapper.send(synPacket, remoteAddress);
-  createTimerTask(2000, synPacket);  // retry after 2 seconds
+  createTimerTask(1000, synPacket);  // retry after 2 seconds
   
   System.out.println("About to wait, state=" + state);
   // Wait for connection to be established
@@ -134,7 +134,7 @@ private int ackNum = 0;
             false, false, true, 0, null
         );
         TCPWrapper.send(finPacket, remoteAddress);
-        createTimerTask(2000, finPacket);
+        createTimerTask(1000, finPacket);
         changeState(State.LAST_ACK);
     }
     break;
@@ -187,7 +187,7 @@ case LAST_ACK:
         seqNum, ackNum,
         false, false, true, 0, null
     );
-        createTimerTask(2000, finPacket);
+        createTimerTask(1000, finPacket);
     }
     break;
 
@@ -286,7 +286,7 @@ case CLOSING:
         );
         changeState(State.SYN_RCVD);
         TCPWrapper.send(synAckPacket, remoteAddress);
-        createTimerTask(2000, synAckPacket);
+        createTimerTask(1000, synAckPacket);
       }
       break;
       
@@ -431,7 +431,7 @@ case CLOSING:
         0, null
     );
     TCPWrapper.send(finPacket, remoteAddress);
-    createTimerTask(2000, finPacket);
+    createTimerTask(1000, finPacket);
     
     while (state != State.CLOSED) {
         try {
