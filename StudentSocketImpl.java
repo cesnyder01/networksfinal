@@ -245,6 +245,12 @@ case CLOSING:
             true, false, false, 0, null
         );
         TCPWrapper.send(ackPacket, remoteAddress);
+        TCPPacket finPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            false, false, true, 0, null
+        );
+        TCPWrapper.send(finPacket, remoteAddress);
     }
     break;
     case LISTEN:
