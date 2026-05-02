@@ -104,6 +104,16 @@ private int ackNum = 0;
   // Handle different states
   switch(state) {
     case ESTABLISHED:
+        if (p.synFlag && p.ackFlag) {
+        // stale SYN-ACK retransmit - send ACK to silence server
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        break;
+    }
     if (p.finFlag) {
         // passive close - remote side closing first
         ackNum = p.seqNum + 1;
@@ -176,6 +186,16 @@ case LAST_ACK:
     break;
 
 case FIN_WAIT_2:
+      if (p.synFlag && p.ackFlag) {
+        // stale SYN-ACK retransmit - send ACK to silence server
+        TCPPacket ackPacket = new TCPPacket(
+            localport, remotePort,
+            seqNum, ackNum,
+            true, false, false, 0, null
+        );
+        TCPWrapper.send(ackPacket, remoteAddress);
+        break;
+    }
     if (p.finFlag) {
         // received FIN
         ackNum = p.seqNum + 1;
