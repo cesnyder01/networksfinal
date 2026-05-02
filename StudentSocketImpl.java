@@ -182,6 +182,11 @@ case LAST_ACK:
         );
         TCPWrapper.send(ackPacket, remoteAddress);
         changeState(State.CLOSING);
+        TCPPacket finPacket = new TCPPacket(
+        localport, remotePort,
+        seqNum, ackNum,
+        false, false, true, 0, null
+    );
         createTimerTask(2000, finPacket);
     }
     break;
